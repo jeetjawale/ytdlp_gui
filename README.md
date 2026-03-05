@@ -8,26 +8,40 @@ A modern, cross-platform desktop GUI for [yt-dlp](https://github.com/yt-dlp/yt-d
 
 ## Features
 
-- **Single Video Download** — Paste any supported URL and download in your preferred format
-- **Playlist Download** — Full playlist support with per-video progress tracking
-- **Format Selection** — Choose between video+audio or audio-only extraction
-- **Quality Selection** — Pick from Best, 4K, 1080p, 720p, 480p, 360p, or worst quality
-- **Audio Extraction** — Extract audio as MP3, M4A, OPUS, FLAC, or WAV with bitrate control
-- **Download Queue** — Queue multiple downloads; they process sequentially
-- **Progress Tracking** — Real-time progress bar with speed, ETA, and file size
-- **Download History** — Persistent history of completed downloads with quick folder access
-- **Dark Theme** — Modern dark UI that's easy on the eyes
+### Core
+- **Single Video & Playlist Download** — Paste any supported URL and download in your preferred format
+- **Format Selection** — Choose video+audio or audio-only extraction
+- **Quality Selection** — Best, 4K, 1080p, 720p, 480p, 360p, or worst quality
+- **Audio Extraction** — MP3, M4A, OPUS, FLAC, or WAV with bitrate control
+- **Download Queue** — Queue multiple downloads with progress tracking
+- **Download History** — Persistent history with quick folder access
+
+### Advanced
+- **Concurrent Downloads** — Up to 3 simultaneous downloads (configurable)
+- **Drag & Drop** — Drop URLs directly onto the window
+- **Batch Import** — Import multiple URLs at once from text or a file
+- **Format Browser** — Browse and select from all available formats in a table
+- **Subtitle Download** — Download and embed subtitles with language selection
+- **SponsorBlock** — Auto-remove sponsor segments, intros, outros
+- **Speed Limit** — Throttle download speed (500 KB/s to 10 MB/s)
+- **Cookie Import** — Import cookies from Chrome, Firefox, Edge, Safari, and more
+- **Custom Filename Templates** — Use yt-dlp template syntax for output filenames
+- **System Tray** — Minimize to tray with balloon notifications on completion
+- **Light / Dark Theme** — Toggle between dark and light themes (persisted)
+
+### Packaging
+- **PyInstaller Build Script** — Build standalone executables for any OS
 
 ## Requirements
 
 - Python 3.9+
-- [FFmpeg](https://ffmpeg.org/) (required for audio extraction and video merging)
+- [FFmpeg](https://ffmpeg.org/) (required for audio extraction, video merging, and subtitle embedding)
 
 ## Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/jeetjawale/ytdlp_gui.git
    cd ytdlp_gui
    ```
 
@@ -57,28 +71,46 @@ python main.py
 
 ### Workflow
 
-1. **Paste a URL** into the input field (or click the clipboard button)
+1. **Paste a URL** into the input field, drag & drop, or use batch import
 2. **Click "Fetch Info"** to retrieve video/playlist metadata
-3. **Select format options** — toggle audio-only, choose quality, set output directory
-4. **Click "Add to Queue"** to start downloading
-5. **Monitor progress** in the Downloads tab
-6. **View history** in the History tab
+3. **Browse Formats** (optional) to manually pick a specific format
+4. **Configure options** — quality, subtitles, SponsorBlock, speed limit, filename template
+5. **Click "Add to Queue"** to start downloading
+6. **Monitor progress** in the Downloads tab (up to 3 concurrent)
+7. **View history** in the History tab
+8. **Minimize to tray** — downloads continue in the background
+
+### Building Standalone Executables
+
+```bash
+# Install PyInstaller
+pip install pyinstaller
+
+# Build (one-dir, recommended)
+python build.py
+
+# Build single-file executable
+python build.py --onefile
+
+# Output in dist/YT-DLP-GUI/
+```
 
 ## Project Structure
 
 ```
 ytdlp_gui/
 ├── main.py              # Application entry point
+├── build.py             # PyInstaller build script
 ├── requirements.txt     # Python dependencies
 ├── README.md
 └── src/
     ├── __init__.py
-    ├── main_window.py   # Main window with all UI logic
-    ├── widgets.py       # Custom Qt widgets (info card, format panel, queue, history)
-    ├── workers.py       # Background threads (info fetch, download)
-    ├── models.py        # Data models (DownloadItem, DownloadStatus)
+    ├── main_window.py   # Main window — download orchestration, tray, drag & drop
+    ├── widgets.py       # Custom widgets (format panel, advanced settings, dialogs)
+    ├── workers.py       # Background threads (info fetch, format parsing, download)
+    ├── models.py        # Data models (DownloadItem, FormatInfo, DownloadStatus)
     ├── settings.py      # JSON-backed settings persistence
-    └── styles.py        # QSS dark theme stylesheet
+    └── styles.py        # QSS dark + light theme stylesheets
 ```
 
 ## Supported Sites

@@ -2,27 +2,32 @@
 
 import os
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import Qt, QMimeData, QUrl
+from PyQt6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QIcon, QAction
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QLineEdit,
+    QSystemTrayIcon,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from .models import DownloadItem, DownloadStatus
+from .models import DownloadItem, DownloadStatus, FormatInfo
 from .settings import Settings
-from .styles import DARK_THEME
+from .styles import DARK_THEME, LIGHT_THEME
 from .widgets import (
+    AdvancedSettingsPanel,
+    BatchImportDialog,
+    FormatBrowserDialog,
     FormatPanel,
     HistoryPanel,
     QueuePanel,
@@ -32,24 +37,33 @@ from .workers import DownloadWorker, InfoWorker
 
 
 class MainWindow(QMainWindow):
-    """Main application window with URL input, format options, queue, and history."""
+    """Main application window with all features."""
+
+    MAX_CONCURRENT = 3  # configurable concurrent download limit
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("YT-DLP GUI")
-        self.setMinimumSize(820, 620)
-        self.resize(960, 720)
-        self.setStyleSheet(DARK_THEME)
+        self.setMinimumSize(880, 660)
+        self.resize(1000, 760)
 
         # ── State ──
         self.current_info: Optional[dict] = None
+        self.current_formats: List[FormatInfo] = []
         self.download_queue: List[DownloadItem] = []
-        self.active_worker: Optional[DownloadWorker] = None
-        self.active_item: Optional[DownloadItem] = None
+        self.active_workers: Dict[str, DownloadWorker] = {}  # item.id -> worker
         self.info_worker: Optional[InfoWorker] = None
         self.settings = Settings()
+        self._dark_mode = self.settings.get("dark_mode", True)
+
+        # Apply theme
+        self.setStyleSheet(DARK_THEME if self._dark_mode else LIGHT_THEME)
+
+        # Enable drag & drop
+        self.setAcceptDrops(True)
 
         self._setup_ui()
+        self._setup_tray()
         self._connect_signals()
         self._load_history()
 
@@ -62,17 +76,17 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         main_layout = QVBoxLayout(central)
-        main_layout.setSpacing(12)
-        main_layout.setContentsMargins(18, 18, 18, 12)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(18, 14, 18, 12)
 
-        # ─── URL bar ───
-        url_layout = QHBoxLayout()
-        url_layout.setSpacing(8)
+        # ─── Top toolbar row: URL bar + batch + theme ───
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
 
         self.url_input = QLineEdit()
         self.url_input.setObjectName("urlInput")
         self.url_input.setPlaceholderText(
-            "Paste a YouTube, Vimeo, or any supported URL here..."
+            "Paste a YouTube, Vimeo, or any supported URL here... (or drag & drop)"
         )
 
         self.paste_btn = QPushButton("\U0001f4cb")
@@ -85,10 +99,22 @@ class MainWindow(QMainWindow):
         self.fetch_btn.setFixedWidth(130)
         self.fetch_btn.setFixedHeight(42)
 
-        url_layout.addWidget(self.url_input)
-        url_layout.addWidget(self.paste_btn)
-        url_layout.addWidget(self.fetch_btn)
-        main_layout.addLayout(url_layout)
+        self.batch_btn = QPushButton("\U0001f4c4")
+        self.batch_btn.setToolTip("Batch import multiple URLs")
+        self.batch_btn.setObjectName("batchBtn")
+        self.batch_btn.setFixedSize(42, 42)
+
+        self.theme_btn = QPushButton("\U0001f319" if self._dark_mode else "\u2600\ufe0f")
+        self.theme_btn.setToolTip("Toggle light / dark theme")
+        self.theme_btn.setObjectName("themeToggle")
+        self.theme_btn.setFixedSize(38, 38)
+
+        top_row.addWidget(self.url_input)
+        top_row.addWidget(self.paste_btn)
+        top_row.addWidget(self.fetch_btn)
+        top_row.addWidget(self.batch_btn)
+        top_row.addWidget(self.theme_btn)
+        main_layout.addLayout(top_row)
 
         # ─── Video info card (hidden until fetch) ───
         self.info_card = VideoInfoCard()
@@ -100,6 +126,11 @@ class MainWindow(QMainWindow):
         self.format_panel = FormatPanel(default_dir)
         self.format_panel.hide()
         main_layout.addWidget(self.format_panel)
+
+        # ─── Advanced settings panel (hidden until fetch) ───
+        self.advanced_panel = AdvancedSettingsPanel()
+        self.advanced_panel.hide()
+        main_layout.addWidget(self.advanced_panel)
 
         # ─── Add to Queue button (hidden until fetch) ───
         btn_layout = QHBoxLayout()
@@ -122,7 +153,58 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.tabs, 1)
 
         # ─── Status bar ───
-        self.statusBar().showMessage("Ready \u2014 Paste a URL to get started")
+        self.statusBar().showMessage(
+            "Ready \u2014 Paste a URL, drag & drop, or use batch import"
+        )
+
+    # ──────────────────────────────────
+    # System Tray
+    # ──────────────────────────────────
+
+    def _setup_tray(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        # Use application icon or a default
+        icon = self.windowIcon()
+        if icon.isNull():
+            icon = QIcon.fromTheme("video-x-generic")
+        self.tray_icon.setIcon(icon)
+        self.tray_icon.setToolTip("YT-DLP GUI")
+
+        tray_menu = QMenu()
+        show_action = QAction("Show Window", self)
+        show_action.triggered.connect(self._show_from_tray)
+        tray_menu.addAction(show_action)
+
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(self._quit_from_tray)
+        tray_menu.addAction(quit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
+
+    def _show_from_tray(self):
+        self.showNormal()
+        self.activateWindow()
+
+    def _quit_from_tray(self):
+        self._force_quit = True
+        self.close()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            if self.isVisible():
+                self.hide()
+            else:
+                self._show_from_tray()
+
+    def _notify(self, title: str, message: str):
+        """Send a system tray notification."""
+        if self.tray_icon.isSystemTrayAvailable():
+            self.tray_icon.showMessage(
+                title, message,
+                QSystemTrayIcon.MessageIcon.Information, 3000,
+            )
 
     # ──────────────────────────────────
     # Signal connections
@@ -134,7 +216,52 @@ class MainWindow(QMainWindow):
         self.url_input.returnPressed.connect(self.fetch_info)
         self.add_queue_btn.clicked.connect(self.add_to_queue)
         self.format_panel.browse_btn.clicked.connect(self._browse_output_dir)
+        self.format_panel.browse_formats_clicked.connect(self._open_format_browser)
         self.history_panel.history_cleared.connect(self._on_history_cleared)
+        self.batch_btn.clicked.connect(self._open_batch_import)
+        self.theme_btn.clicked.connect(self._toggle_theme)
+
+    # ──────────────────────────────────
+    # Drag & Drop
+    # ──────────────────────────────────
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        mime = event.mimeData()
+        if mime.hasUrls() or mime.hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent):
+        mime = event.mimeData()
+        urls: List[str] = []
+
+        if mime.hasUrls():
+            for url in mime.urls():
+                text = url.toString().strip()
+                if text:
+                    urls.append(text)
+        elif mime.hasText():
+            for line in mime.text().splitlines():
+                line = line.strip()
+                if line:
+                    urls.append(line)
+
+        if len(urls) == 1:
+            self.url_input.setText(urls[0])
+            self.fetch_info()
+        elif urls:
+            self._batch_fetch(urls)
+
+        event.acceptProposedAction()
+
+    # ──────────────────────────────────
+    # Theme Toggle
+    # ──────────────────────────────────
+
+    def _toggle_theme(self):
+        self._dark_mode = not self._dark_mode
+        self.setStyleSheet(DARK_THEME if self._dark_mode else LIGHT_THEME)
+        self.theme_btn.setText("\U0001f319" if self._dark_mode else "\u2600\ufe0f")
+        self.settings.set("dark_mode", self._dark_mode)
 
     # ──────────────────────────────────
     # URL & Info Fetching
@@ -163,10 +290,11 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Please enter a URL first")
             return
 
-        # Disconnect any previous worker signals
+        # Disconnect any previous worker
         if self.info_worker is not None:
             try:
                 self.info_worker.info_ready.disconnect()
+                self.info_worker.formats_ready.disconnect()
                 self.info_worker.thumbnail_ready.disconnect()
                 self.info_worker.error.disconnect()
             except (TypeError, RuntimeError):
@@ -179,11 +307,17 @@ class MainWindow(QMainWindow):
         # Hide previous results
         self.info_card.hide()
         self.format_panel.hide()
+        self.advanced_panel.hide()
         self.add_queue_btn.hide()
         self.current_info = None
+        self.current_formats = []
+        self.format_panel.clear_manual_format()
+        self.format_panel.browse_formats_btn.hide()
 
-        self.info_worker = InfoWorker(url)
+        cookie_browser = self.advanced_panel.get_cookie_browser()
+        self.info_worker = InfoWorker(url, cookie_browser)
         self.info_worker.info_ready.connect(self._on_info_ready)
+        self.info_worker.formats_ready.connect(self._on_formats_ready)
         self.info_worker.thumbnail_ready.connect(self._on_thumbnail_ready)
         self.info_worker.error.connect(self._on_info_error)
         self.info_worker.start()
@@ -199,6 +333,7 @@ class MainWindow(QMainWindow):
         self.info_card.update_info(info)
         self.info_card.show()
         self.format_panel.show()
+        self.advanced_panel.show()
         self.add_queue_btn.show()
 
         if is_playlist:
@@ -208,6 +343,10 @@ class MainWindow(QMainWindow):
             )
         else:
             self.statusBar().showMessage(f"Video: {title}")
+
+    def _on_formats_ready(self, formats: list):
+        self.current_formats = formats
+        self.format_panel.browse_formats_btn.show()
 
     def _on_thumbnail_ready(self, data: bytes):
         pixmap = QPixmap()
@@ -223,6 +362,58 @@ class MainWindow(QMainWindow):
             self, "Fetch Error",
             f"Failed to fetch video info:\n\n{error}",
         )
+
+    # ──────────────────────────────────
+    # Format Browser
+    # ──────────────────────────────────
+
+    def _open_format_browser(self):
+        if not self.current_formats:
+            self.statusBar().showMessage("No format data available")
+            return
+        dialog = FormatBrowserDialog(self.current_formats, self)
+        dialog.format_selected.connect(self.format_panel.set_manual_format)
+        dialog.exec()
+
+    # ──────────────────────────────────
+    # Batch Import
+    # ──────────────────────────────────
+
+    def _open_batch_import(self):
+        dialog = BatchImportDialog(self)
+        dialog.urls_ready.connect(self._batch_fetch)
+        dialog.exec()
+
+    def _batch_fetch(self, urls: List[str]):
+        """Add multiple URLs to the queue using current format settings."""
+        count = 0
+        for url in urls:
+            url = url.strip()
+            if not url:
+                continue
+            item = DownloadItem(
+                url=url,
+                title=url[:60] + "..." if len(url) > 60 else url,
+                audio_only=self.format_panel.audio_only_check.isChecked(),
+                quality=self.format_panel.get_quality(),
+                audio_format=self.format_panel.get_audio_format(),
+                audio_quality=self.format_panel.get_audio_quality(),
+                output_dir=self.format_panel.output_dir.text().strip(),
+                filename_template=self.format_panel.get_filename_template(),
+                format_id=self.format_panel.get_selected_format_id(),
+                write_subs=self.advanced_panel.get_write_subs(),
+                embed_subs=self.advanced_panel.get_embed_subs(),
+                subtitle_langs=self.advanced_panel.get_subtitle_langs(),
+                speed_limit=self.advanced_panel.get_speed_limit(),
+                cookie_browser=self.advanced_panel.get_cookie_browser(),
+                sponsorblock=self.advanced_panel.get_sponsorblock(),
+            )
+            self._enqueue_item(item)
+            count += 1
+
+        self.tabs.setCurrentIndex(0)
+        self.statusBar().showMessage(f"Batch added {count} URL{'s' if count != 1 else ''} to queue")
+        self._process_queue()
 
     # ──────────────────────────────────
     # Queue Management
@@ -250,58 +441,76 @@ class MainWindow(QMainWindow):
             audio_format=self.format_panel.get_audio_format(),
             audio_quality=self.format_panel.get_audio_quality(),
             output_dir=self.format_panel.output_dir.text().strip(),
+            filename_template=self.format_panel.get_filename_template(),
+            format_id=self.format_panel.get_selected_format_id(),
             total_videos=entries_count,
+            # Advanced options
+            write_subs=self.advanced_panel.get_write_subs(),
+            embed_subs=self.advanced_panel.get_embed_subs(),
+            subtitle_langs=self.advanced_panel.get_subtitle_langs(),
+            speed_limit=self.advanced_panel.get_speed_limit(),
+            cookie_browser=self.advanced_panel.get_cookie_browser(),
+            sponsorblock=self.advanced_panel.get_sponsorblock(),
         )
 
-        self.download_queue.append(item)
-        widget = self.queue_panel.add_item(item)
-        widget.cancel_clicked.connect(lambda i=item: self._cancel_download(i))
-
-        self._update_tab_counts()
+        self._enqueue_item(item)
         self.statusBar().showMessage(f"Added to queue: {item.title}")
 
         # Reset UI for next URL
         self.url_input.clear()
         self.info_card.hide()
         self.format_panel.hide()
+        self.advanced_panel.hide()
         self.add_queue_btn.hide()
         self.current_info = None
+        self.current_formats = []
+        self.format_panel.clear_manual_format()
+        self.format_panel.browse_formats_btn.hide()
 
-        # Switch to downloads tab
         self.tabs.setCurrentIndex(0)
-
         self._process_queue()
 
+    def _enqueue_item(self, item: DownloadItem):
+        """Add a DownloadItem to the queue and create its widget."""
+        self.download_queue.append(item)
+        widget = self.queue_panel.add_item(item)
+        widget.cancel_clicked.connect(lambda i=item: self._cancel_download(i))
+        self._update_tab_counts()
+
     def _process_queue(self):
-        """Start the next queued download if nothing is active."""
-        if self.active_worker is not None:
+        """Start queued downloads up to MAX_CONCURRENT."""
+        active_count = len(self.active_workers)
+        if active_count >= self.MAX_CONCURRENT:
             return
 
         for item in self.download_queue:
             if item.status == DownloadStatus.QUEUED:
                 self._start_download(item)
-                return
+                active_count += 1
+                if active_count >= self.MAX_CONCURRENT:
+                    return
 
     def _start_download(self, item: DownloadItem):
         item.status = DownloadStatus.DOWNLOADING
-        self.active_item = item
 
         opts = self._build_ydl_opts(item)
-        self.active_worker = DownloadWorker(item.url, opts)
+        worker = DownloadWorker(item.url, opts)
 
-        self.active_worker.progress.connect(
+        worker.progress.connect(
             lambda data, i=item: self._on_progress(i, data)
         )
-        self.active_worker.finished.connect(
+        worker.finished.connect(
             lambda i=item: self._on_download_finished(i)
         )
-        self.active_worker.error.connect(
+        worker.error.connect(
             lambda err, i=item: self._on_download_error(i, err)
         )
-        self.active_worker.status_update.connect(
+        worker.status_update.connect(
             lambda msg, i=item: self._on_status_update(i, msg)
         )
-        self.active_worker.start()
+
+        self.active_workers[item.id] = worker
+        worker.start()
 
         self.queue_panel.update_item(item)
         self.statusBar().showMessage(f"Downloading: {item.title}")
@@ -311,15 +520,20 @@ class MainWindow(QMainWindow):
         output_dir = item.output_dir or os.path.expanduser("~/Downloads")
         os.makedirs(output_dir, exist_ok=True)
 
+        template = item.filename_template or "%(title)s.%(ext)s"
         opts: dict = {
-            "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
+            "outtmpl": os.path.join(output_dir, template),
             "quiet": True,
             "no_warnings": True,
             "noprogress": True,
-            "noplaylist": False,  # allow playlists
+            "noplaylist": False,
         }
 
-        if item.audio_only:
+        # ── Format selection ──
+        if item.format_id:
+            # Manual format from format browser
+            opts["format"] = item.format_id
+        elif item.audio_only:
             opts["format"] = "bestaudio/best"
             opts["postprocessors"] = [
                 {
@@ -342,6 +556,35 @@ class MainWindow(QMainWindow):
                 )
             opts["merge_output_format"] = "mp4"
 
+        # ── Subtitles ──
+        if item.write_subs:
+            opts["writesubtitles"] = True
+            opts["subtitleslangs"] = [
+                lang.strip() for lang in item.subtitle_langs.split(",")
+            ]
+            if item.embed_subs:
+                pps = opts.get("postprocessors", [])
+                pps.append({"key": "FFmpegEmbedSubtitle"})
+                opts["postprocessors"] = pps
+
+        # ── Speed limit ──
+        if item.speed_limit > 0:
+            opts["ratelimit"] = item.speed_limit
+
+        # ── Cookies ──
+        if item.cookie_browser:
+            opts["cookiesfrombrowser"] = (item.cookie_browser,)
+
+        # ── SponsorBlock ──
+        if item.sponsorblock:
+            pps = opts.get("postprocessors", [])
+            pps.append({
+                "key": "SponsorBlock",
+                "categories": ["sponsor", "intro", "outro", "selfpromo", "interaction"],
+            })
+            pps.append({"key": "ModifyChapters", "remove_sponsor_segments": ["sponsor", "intro", "outro", "selfpromo", "interaction"]})
+            opts["postprocessors"] = pps
+
         return opts
 
     # ──────────────────────────────────
@@ -354,12 +597,14 @@ class MainWindow(QMainWindow):
         if status == "downloading":
             video_percent = data.get("percent", 0)
 
-            # Calculate overall progress for playlists
             pl_index = data.get("playlist_index")
             pl_count = data.get("playlist_count")
             if pl_count and pl_count > 1 and pl_index:
                 per_video = 100.0 / pl_count
-                item.progress = (pl_index - 1) * per_video + (video_percent / 100.0) * per_video
+                item.progress = (
+                    (pl_index - 1) * per_video
+                    + (video_percent / 100.0) * per_video
+                )
                 item.current_video_index = pl_index
                 item.total_videos = pl_count
             else:
@@ -389,14 +634,17 @@ class MainWindow(QMainWindow):
         item.progress = 100.0
         item.completed_at = time.time()
 
-        self.active_worker = None
-        self.active_item = None
+        # Clean up worker
+        self.active_workers.pop(item.id, None)
 
         self.queue_panel.update_item(item)
         self.history_panel.add_item(item)
         self._save_history()
         self._update_tab_counts()
-        self.statusBar().showMessage(f"Completed: {item.title}")
+
+        msg = f"Completed: {item.title}"
+        self.statusBar().showMessage(msg)
+        self._notify("Download Complete", item.title)
 
         self._process_queue()
 
@@ -407,14 +655,16 @@ class MainWindow(QMainWindow):
             item.status = DownloadStatus.ERROR
             item.error_message = error
 
-        self.active_worker = None
-        self.active_item = None
+        self.active_workers.pop(item.id, None)
 
         self.queue_panel.update_item(item)
         self._update_tab_counts()
 
         if item.status == DownloadStatus.ERROR:
-            self.statusBar().showMessage(f"Error downloading {item.title}: {error}")
+            self.statusBar().showMessage(
+                f"Error downloading {item.title}: {error}"
+            )
+            self._notify("Download Error", f"{item.title}: {error}")
         else:
             self.statusBar().showMessage(f"Cancelled: {item.title}")
 
@@ -422,8 +672,9 @@ class MainWindow(QMainWindow):
 
     def _cancel_download(self, item: DownloadItem):
         """Cancel a download (active or queued)."""
-        if item is self.active_item and self.active_worker:
-            self.active_worker.cancel()
+        worker = self.active_workers.get(item.id)
+        if worker:
+            worker.cancel()
         elif item.status == DownloadStatus.QUEUED:
             item.status = DownloadStatus.CANCELLED
             self.queue_panel.update_item(item)
@@ -468,21 +719,35 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event):
-        """Handle window close — prompt if download is active."""
-        if self.active_worker and self.active_worker.isRunning():
+        """Minimize to tray instead of closing, unless explicitly quitting."""
+        if not getattr(self, "_force_quit", False) and self.tray_icon.isSystemTrayAvailable():
+            # If downloads are running, minimize to tray
+            if self.active_workers:
+                event.ignore()
+                self.hide()
+                self._notify(
+                    "Still Running",
+                    f"{len(self.active_workers)} download(s) in progress"
+                )
+                return
+
+        # Actually quit
+        if self.active_workers:
             reply = QMessageBox.question(
                 self,
                 "Confirm Exit",
-                "A download is in progress. Cancel it and exit?",
+                f"{len(self.active_workers)} download(s) in progress. Cancel and exit?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.No:
                 event.ignore()
                 return
-            self.active_worker.cancel()
-            self.active_worker.wait(3000)
+            for worker in list(self.active_workers.values()):
+                worker.cancel()
+                worker.wait(2000)
 
         self._save_history()
         self.settings.save()
+        self.tray_icon.hide()
         event.accept()

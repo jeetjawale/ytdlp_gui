@@ -14,6 +14,9 @@ def main():
     app.setApplicationName("YT-DLP GUI")
     app.setOrganizationName("ytdlp-gui")
 
+    # Keep app alive when window is hidden to tray
+    app.setQuitOnLastWindowClosed(False)
+
     # Use a clean sans-serif font
     font = QFont("Segoe UI", 10)
     font.setStyleHint(QFont.StyleHint.SansSerif)
