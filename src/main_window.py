@@ -67,6 +67,20 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._load_history()
 
+        # Check for FFmpeg on startup
+        if not self._ffmpeg_installed():
+            self.statusBar().showMessage("Warning: FFmpeg not found! Audio/subtitles will fail.")
+            self._notify("FFmpeg Missing", "FFmpeg is not installed or not in PATH. Audio extraction and subtitles will not work.")
+            QMessageBox.warning(
+                self, "FFmpeg Missing",
+                "FFmpeg is not installed or not in PATH.\nAudio extraction and subtitles will not work.\n\nSee README for installation instructions.",
+            )
+
+    def _ffmpeg_installed(self) -> bool:
+        """Check if FFmpeg is available in PATH."""
+        from shutil import which
+        return which("ffmpeg") is not None
+
     # ──────────────────────────────────
     # UI Setup
     # ──────────────────────────────────
@@ -288,6 +302,8 @@ class MainWindow(QMainWindow):
         url = self.url_input.text().strip()
         if not url:
             self.statusBar().showMessage("Please enter a URL first")
+            self._notify("Invalid URL", "Please enter a valid video or playlist URL.")
+            QMessageBox.warning(self, "Invalid URL", "Please enter a valid video or playlist URL.")
             return
 
         # Disconnect any previous worker
@@ -358,10 +374,22 @@ class MainWindow(QMainWindow):
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("\U0001f50d  Fetch Info")
         self.statusBar().showMessage(f"Error: {error}")
-        QMessageBox.warning(
-            self, "Fetch Error",
-            f"Failed to fetch video info:\n\n{error}",
-        )
+        self._notify("Fetch Error", error)
+        if "ffmpeg" in error.lower():
+            QMessageBox.critical(
+                self, "FFmpeg Error",
+                f"FFmpeg is required for this operation but was not found.\n\n{error}\n\nSee README for installation instructions."
+            )
+        elif "network" in error.lower() or "connection" in error.lower():
+            QMessageBox.critical(
+                self, "Network Error",
+                f"Network error occurred:\n\n{error}\n\nCheck your internet connection."
+            )
+        else:
+            QMessageBox.warning(
+                self, "Fetch Error",
+                f"Failed to fetch video info:\n\n{error}",
+            )
 
     # ──────────────────────────────────
     # Format Browser
@@ -491,6 +519,20 @@ class MainWindow(QMainWindow):
                     return
 
     def _start_download(self, item: DownloadItem):
+        # Check for FFmpeg if audio extraction or subtitles are requested
+        needs_ffmpeg = item.audio_only or item.write_subs or item.embed_subs
+        if needs_ffmpeg and not self._ffmpeg_installed():
+            item.status = DownloadStatus.ERROR
+            item.error_message = "FFmpeg is required for audio extraction or subtitles but was not found."
+            self.queue_panel.update_item(item)
+            self.statusBar().showMessage(f"Error: FFmpeg not found for {item.title}")
+            self._notify("FFmpeg Missing", f"FFmpeg is required for {item.title} but was not found.")
+            QMessageBox.critical(
+                self, "FFmpeg Missing",
+                f"FFmpeg is required for audio extraction or subtitles but was not found.\n\nSee README for installation instructions."
+            )
+            return
+
         item.status = DownloadStatus.DOWNLOADING
 
         opts = self._build_ydl_opts(item)
