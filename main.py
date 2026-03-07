@@ -14,8 +14,18 @@ def main():
     app.setApplicationName("YT-DLP GUI")
     app.setOrganizationName("ytdlp-gui")
 
-    # Keep app alive when window is hidden to tray
-    app.setQuitOnLastWindowClosed(False)
+    # Handle Ctrl+C (SIGINT) to quit app
+    import signal
+    signal.signal(signal.SIGINT, lambda *args: app.quit())
+
+    # QTimer to allow Python signal handling (Ctrl+C)
+    from PyQt6.QtCore import QTimer
+    timer = QTimer()
+    timer.timeout.connect(lambda: None)
+    timer.start(200)
+
+    # Quit app when window is closed
+    app.setQuitOnLastWindowClosed(True)
 
     # Use a clean sans-serif font
     font = QFont("Segoe UI", 10)

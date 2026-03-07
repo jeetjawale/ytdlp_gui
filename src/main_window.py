@@ -137,6 +137,9 @@ class MainWindow(QMainWindow):
 
         # ─── Format options panel (hidden until fetch) ───
         default_dir = self.settings.get("output_dir", "")
+        # Debug: print the file path of the loaded FormatPanel class
+        import inspect
+        print('FormatPanel loaded from:', inspect.getfile(FormatPanel))
         self.format_panel = FormatPanel(default_dir)
         self.format_panel.hide()
         main_layout.addWidget(self.format_panel)
@@ -229,6 +232,9 @@ class MainWindow(QMainWindow):
         self.paste_btn.clicked.connect(self._paste_url)
         self.url_input.returnPressed.connect(self.fetch_info)
         self.add_queue_btn.clicked.connect(self.add_to_queue)
+        # Defensive: check if browse_btn exists, else raise clear error
+        if not hasattr(self.format_panel, "browse_btn"):
+            raise AttributeError("FormatPanel is missing 'browse_btn'. Check src/widgets.py for correct definition and reload/rebuild if recently edited.")
         self.format_panel.browse_btn.clicked.connect(self._browse_output_dir)
         self.format_panel.browse_formats_clicked.connect(self._open_format_browser)
         self.history_panel.history_cleared.connect(self._on_history_cleared)
@@ -572,11 +578,18 @@ class MainWindow(QMainWindow):
         }
 
         # ── Format selection ──
+        ext = self.format_panel.get_ext()
+        codec = self.format_panel.get_codec()
+
         if item.format_id:
             # Manual format from format browser
             opts["format"] = item.format_id
         elif item.audio_only:
-            opts["format"] = "bestaudio/best"
+            # Audio-only, filter by ext if set
+            if ext:
+                opts["format"] = f"bestaudio[ext={ext}]/bestaudio/best"
+            else:
+                opts["format"] = "bestaudio/best"
             opts["postprocessors"] = [
                 {
                     "key": "FFmpegExtractAudio",
@@ -586,17 +599,28 @@ class MainWindow(QMainWindow):
             ]
         else:
             quality = item.quality
+            # Build video filter
+            video_filter = "bestvideo"
+            if ext:
+                video_filter += f"[ext={ext}]"
+            if codec:
+                video_filter += f"[vcodec={codec}]"
+            # Build audio filter
+            audio_filter = "bestaudio"
+            if ext:
+                audio_filter += f"[ext={ext}]"
+
             if quality == "best":
-                opts["format"] = "bestvideo+bestaudio/best"
+                opts["format"] = f"{video_filter}+{audio_filter}/best"
             elif quality == "worst":
                 opts["format"] = "worst"
             else:
                 height = quality.replace("p", "")
                 opts["format"] = (
-                    f"bestvideo[height<={height}]+bestaudio"
+                    f"{video_filter}[height<={height}]+{audio_filter}"
                     f"/best[height<={height}]/best"
                 )
-            opts["merge_output_format"] = "mp4"
+            opts["merge_output_format"] = ext if ext else "mp4"
 
         # ── Subtitles ──
         if item.write_subs:
@@ -761,33 +785,11 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event):
-        """Minimize to tray instead of closing, unless explicitly quitting."""
-        if not getattr(self, "_force_quit", False) and self.tray_icon.isSystemTrayAvailable():
-            # If downloads are running, minimize to tray
-            if self.active_workers:
-                event.ignore()
-                self.hide()
-                self._notify(
-                    "Still Running",
-                    f"{len(self.active_workers)} download(s) in progress"
-                )
-                return
-
-        # Actually quit
-        if self.active_workers:
-            reply = QMessageBox.question(
-                self,
-                "Confirm Exit",
-                f"{len(self.active_workers)} download(s) in progress. Cancel and exit?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply == QMessageBox.StandardButton.No:
-                event.ignore()
-                return
-            for worker in list(self.active_workers.values()):
-                worker.cancel()
-                worker.wait(2000)
+        """Always fully quit the app on window close, even if downloads are running."""
+        # Cancel all active downloads
+        for worker in list(self.active_workers.values()):
+            worker.cancel()
+            worker.wait(2000)
 
         self._save_history()
         self.settings.save()

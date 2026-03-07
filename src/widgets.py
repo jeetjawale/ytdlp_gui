@@ -146,7 +146,7 @@ class FormatPanel(QFrame):
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(10)
 
-        # Row 1: Audio-only toggle, quality, audio format/bitrate, browse formats btn
+        # Row 1: Audio-only toggle, quality, ext, codec, audio format/bitrate, browse formats btn
         row1 = QHBoxLayout()
         row1.setSpacing(16)
 
@@ -161,6 +161,22 @@ class FormatPanel(QFrame):
         self._populate_video_qualities()
         row1.addWidget(self.quality_label)
         row1.addWidget(self.quality_combo)
+
+        # Extension dropdown
+        self.ext_label = QLabel("Ext:")
+        self.ext_label.setObjectName("formatLabel")
+        self.ext_combo = QComboBox()
+        self.ext_combo.addItems(["Any", "mp4", "webm", "mkv", "flv", "mov", "avi"])  # Can be dynamically populated
+        row1.addWidget(self.ext_label)
+        row1.addWidget(self.ext_combo)
+
+        # Codec dropdown
+        self.codec_label = QLabel("Codec:")
+        self.codec_label.setObjectName("formatLabel")
+        self.codec_combo = QComboBox()
+        self.codec_combo.addItems(["Any", "h264", "vp9", "av1", "hevc", "mpeg4"])  # Can be dynamically populated
+        row1.addWidget(self.codec_label)
+        row1.addWidget(self.codec_combo)
 
         # Audio format (visible only when audio-only)
         self.audio_format_label = QLabel("Format:")
@@ -238,6 +254,14 @@ class FormatPanel(QFrame):
         row3.addWidget(self.filename_template, 1)
 
         layout.addLayout(row3)
+
+    def get_ext(self) -> str:
+        ext = self.ext_combo.currentText()
+        return ext.lower() if ext != "Any" else ""
+
+    def get_codec(self) -> str:
+        codec = self.codec_combo.currentText()
+        return codec.lower() if codec != "Any" else ""
 
         # Internal state for manual format override
         self._selected_format_id: str = ""
