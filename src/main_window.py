@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .download_options import build_ydl_opts
+from .error_utils import classify_error
 from .history_service import clamp_history, download_item_to_history_entry
 from .models import DownloadItem, DownloadStatus, FormatInfo
 from .settings import Settings
@@ -379,16 +380,17 @@ class MainWindow(QMainWindow):
             self.info_card.set_thumbnail(pixmap)
 
     def _on_info_error(self, error: str):
+        kind, message = classify_error(error)
         self.fetch_btn.setEnabled(True)
         self.fetch_btn.setText("\U0001f50d  Fetch Info")
-        self.statusBar().showMessage(f"Error: {error}")
-        self._notify("Fetch Error", error)
-        if "ffmpeg" in error.lower():
+        self.statusBar().showMessage(f"Error: {message}")
+        self._notify("Fetch Error", message)
+        if kind == "ffmpeg":
             QMessageBox.critical(
                 self, "FFmpeg Error",
                 f"FFmpeg is required for this operation but was not found.\n\n{error}\n\nSee README for installation instructions."
             )
-        elif "network" in error.lower() or "connection" in error.lower():
+        elif kind == "network":
             QMessageBox.critical(
                 self, "Network Error",
                 f"Network error occurred:\n\n{error}\n\nCheck your internet connection."
