@@ -68,6 +68,8 @@ class DownloadItem:
     # Download options
     audio_only: bool = False
     quality: str = "best"
+    ext: str = ""
+    codec: str = ""
     audio_format: str = "mp3"
     audio_quality: str = "192"
     output_dir: str = ""

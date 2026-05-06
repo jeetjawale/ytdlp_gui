@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .download_options import build_ydl_opts
 from .models import DownloadItem, DownloadStatus, FormatInfo
 from .settings import Settings
 from .styles import DARK_THEME, LIGHT_THEME
@@ -430,6 +431,8 @@ class MainWindow(QMainWindow):
                 title=url[:60] + "..." if len(url) > 60 else url,
                 audio_only=self.format_panel.audio_only_check.isChecked(),
                 quality=self.format_panel.get_quality(),
+                ext=self.format_panel.get_ext(),
+                codec=self.format_panel.get_codec(),
                 audio_format=self.format_panel.get_audio_format(),
                 audio_quality=self.format_panel.get_audio_quality(),
                 output_dir=self.format_panel.output_dir.text().strip(),
@@ -472,6 +475,8 @@ class MainWindow(QMainWindow):
             playlist_count=entries_count,
             audio_only=self.format_panel.audio_only_check.isChecked(),
             quality=self.format_panel.get_quality(),
+            ext=self.format_panel.get_ext(),
+            codec=self.format_panel.get_codec(),
             audio_format=self.format_panel.get_audio_format(),
             audio_quality=self.format_panel.get_audio_quality(),
             output_dir=self.format_panel.output_dir.text().strip(),
@@ -564,94 +569,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Downloading: {item.title}")
 
     def _build_ydl_opts(self, item: DownloadItem) -> dict:
-        """Build yt-dlp options dict from a DownloadItem."""
-        output_dir = item.output_dir or os.path.expanduser("~/Downloads")
-        os.makedirs(output_dir, exist_ok=True)
-
-        template = item.filename_template or "%(title)s.%(ext)s"
-        opts: dict = {
-            "outtmpl": os.path.join(output_dir, template),
-            "quiet": True,
-            "no_warnings": True,
-            "noprogress": True,
-            "noplaylist": False,
-        }
-
-        # ── Format selection ──
-        ext = self.format_panel.get_ext()
-        codec = self.format_panel.get_codec()
-
-        if item.format_id:
-            # Manual format from format browser
-            opts["format"] = item.format_id
-        elif item.audio_only:
-            # Audio-only, filter by ext if set
-            if ext:
-                opts["format"] = f"bestaudio[ext={ext}]/bestaudio/best"
-            else:
-                opts["format"] = "bestaudio/best"
-            opts["postprocessors"] = [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": item.audio_format,
-                    "preferredquality": item.audio_quality,
-                }
-            ]
-        else:
-            quality = item.quality
-            # Build video filter
-            video_filter = "bestvideo"
-            if ext:
-                video_filter += f"[ext={ext}]"
-            if codec:
-                video_filter += f"[vcodec={codec}]"
-            # Build audio filter
-            audio_filter = "bestaudio"
-            if ext:
-                audio_filter += f"[ext={ext}]"
-
-            if quality == "best":
-                opts["format"] = f"{video_filter}+{audio_filter}/best"
-            elif quality == "worst":
-                opts["format"] = "worst"
-            else:
-                height = quality.replace("p", "")
-                opts["format"] = (
-                    f"{video_filter}[height<={height}]+{audio_filter}"
-                    f"/best[height<={height}]/best"
-                )
-            opts["merge_output_format"] = ext if ext else "mp4"
-
-        # ── Subtitles ──
-        if item.write_subs:
-            opts["writesubtitles"] = True
-            opts["subtitleslangs"] = [
-                lang.strip() for lang in item.subtitle_langs.split(",")
-            ]
-            if item.embed_subs:
-                pps = opts.get("postprocessors", [])
-                pps.append({"key": "FFmpegEmbedSubtitle"})
-                opts["postprocessors"] = pps
-
-        # ── Speed limit ──
-        if item.speed_limit > 0:
-            opts["ratelimit"] = item.speed_limit
-
-        # ── Cookies ──
-        if item.cookie_browser:
-            opts["cookiesfrombrowser"] = (item.cookie_browser,)
-
-        # ── SponsorBlock ──
-        if item.sponsorblock:
-            pps = opts.get("postprocessors", [])
-            pps.append({
-                "key": "SponsorBlock",
-                "categories": ["sponsor", "intro", "outro", "selfpromo", "interaction"],
-            })
-            pps.append({"key": "ModifyChapters", "remove_sponsor_segments": ["sponsor", "intro", "outro", "selfpromo", "interaction"]})
-            opts["postprocessors"] = pps
-
-        return opts
+        return build_ydl_opts(item, os.path.expanduser("~/Downloads"))
 
     # ──────────────────────────────────
     # Download Callbacks
