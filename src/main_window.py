@@ -140,9 +140,6 @@ class MainWindow(QMainWindow):
 
         # ─── Format options panel (hidden until fetch) ───
         default_dir = self.settings.get("output_dir", "")
-        # Debug: print the file path of the loaded FormatPanel class
-        import inspect
-        print('FormatPanel loaded from:', inspect.getfile(FormatPanel))
         self.format_panel = FormatPanel(default_dir)
         self.format_panel.hide()
         main_layout.addWidget(self.format_panel)
@@ -235,9 +232,6 @@ class MainWindow(QMainWindow):
         self.paste_btn.clicked.connect(self._paste_url)
         self.url_input.returnPressed.connect(self.fetch_info)
         self.add_queue_btn.clicked.connect(self.add_to_queue)
-        # Defensive: check if browse_btn exists, else raise clear error
-        if not hasattr(self.format_panel, "browse_btn"):
-            raise AttributeError("FormatPanel is missing 'browse_btn'. Check src/widgets.py for correct definition and reload/rebuild if recently edited.")
         self.format_panel.browse_btn.clicked.connect(self._browse_output_dir)
         self.format_panel.browse_formats_clicked.connect(self._open_format_browser)
         self.history_panel.history_cleared.connect(self._on_history_cleared)
