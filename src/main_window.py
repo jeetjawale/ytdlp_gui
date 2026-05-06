@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .download_options import build_ydl_opts
+from .history_service import clamp_history, download_item_to_history_entry
 from .models import DownloadItem, DownloadStatus, FormatInfo
 from .settings import Settings
 from .styles import DARK_THEME, LIGHT_THEME
@@ -622,7 +623,7 @@ class MainWindow(QMainWindow):
         self.active_workers.pop(item.id, None)
 
         self.queue_panel.update_item(item)
-        self.history_panel.add_item(item)
+        self.history_panel.add_history_entry(download_item_to_history_entry(item))
         self._save_history()
         self._update_tab_counts()
 
@@ -678,7 +679,7 @@ class MainWindow(QMainWindow):
 
     def _save_history(self):
         entries = self.history_panel.get_entries()
-        self.settings.set("history", entries[-200:])
+        self.settings.set("history", clamp_history(entries, limit=200))
 
     def _on_history_cleared(self):
         self.settings.set("history", [])
