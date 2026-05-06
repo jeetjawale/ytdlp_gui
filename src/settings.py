@@ -8,10 +8,11 @@ from typing import Any
 class Settings:
     """Simple JSON-backed settings store."""
 
-    def __init__(self):
+    def __init__(self, path: str = ""):
         config_dir = os.path.join(os.path.expanduser("~"), ".ytdlp_gui")
-        self._path = os.path.join(config_dir, "settings.json")
+        self._path = path or os.path.join(config_dir, "settings.json")
         self._data: dict = {}
+        self.last_error: str | None = None
         self._load()
 
     def _load(self):
@@ -19,8 +20,10 @@ class Settings:
             if os.path.exists(self._path):
                 with open(self._path, "r", encoding="utf-8") as f:
                     self._data = json.load(f)
-        except (json.JSONDecodeError, OSError):
+            self.last_error = None
+        except (json.JSONDecodeError, OSError) as exc:
             self._data = {}
+            self.last_error = str(exc)
 
     def save(self):
         """Save settings to disk."""
