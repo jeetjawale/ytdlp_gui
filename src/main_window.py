@@ -106,25 +106,25 @@ class MainWindow(QMainWindow):
             "Paste a YouTube, Vimeo, or any supported URL here... (or drag & drop)"
         )
 
-        self.paste_btn = QPushButton("\U0001f4cb")
+        self.paste_btn = QPushButton("Paste")
         self.paste_btn.setToolTip("Paste from clipboard")
         self.paste_btn.setObjectName("pasteBtn")
-        self.paste_btn.setFixedSize(42, 42)
+        self.paste_btn.setFixedSize(72, 42)
 
-        self.fetch_btn = QPushButton("\U0001f50d  Fetch Info")
+        self.fetch_btn = QPushButton("Fetch Info")
         self.fetch_btn.setObjectName("fetchBtn")
         self.fetch_btn.setFixedWidth(130)
         self.fetch_btn.setFixedHeight(42)
 
-        self.batch_btn = QPushButton("\U0001f4c4")
+        self.batch_btn = QPushButton("Batch")
         self.batch_btn.setToolTip("Batch import multiple URLs")
         self.batch_btn.setObjectName("batchBtn")
-        self.batch_btn.setFixedSize(42, 42)
+        self.batch_btn.setFixedSize(72, 42)
 
-        self.theme_btn = QPushButton("\U0001f319" if self._dark_mode else "\u2600\ufe0f")
+        self.theme_btn = QPushButton("Dark" if self._dark_mode else "Light")
         self.theme_btn.setToolTip("Toggle light / dark theme")
         self.theme_btn.setObjectName("themeToggle")
-        self.theme_btn.setFixedSize(38, 38)
+        self.theme_btn.setFixedSize(72, 42)
 
         top_row.addWidget(self.url_input)
         top_row.addWidget(self.paste_btn)
@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
         # ─── Add to Queue button (hidden until fetch) ───
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        self.add_queue_btn = QPushButton("\U0001f4e5  Add to Queue")
+        self.add_queue_btn = QPushButton("Add to Queue")
         self.add_queue_btn.setObjectName("addQueueBtn")
         self.add_queue_btn.setFixedWidth(170)
         self.add_queue_btn.setFixedHeight(40)
@@ -165,8 +165,8 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.queue_panel = QueuePanel()
         self.history_panel = HistoryPanel()
-        self.tabs.addTab(self.queue_panel, "\U0001f4e5 Downloads (0)")
-        self.tabs.addTab(self.history_panel, "\U0001f4cb History (0)")
+        self.tabs.addTab(self.queue_panel, "Downloads (0)")
+        self.tabs.addTab(self.history_panel, "History (0)")
         main_layout.addWidget(self.tabs, 1)
 
         # ─── Status bar ───
@@ -277,7 +277,7 @@ class MainWindow(QMainWindow):
     def _toggle_theme(self):
         self._dark_mode = not self._dark_mode
         self.setStyleSheet(DARK_THEME if self._dark_mode else LIGHT_THEME)
-        self.theme_btn.setText("\U0001f319" if self._dark_mode else "\u2600\ufe0f")
+        self.theme_btn.setText("Dark" if self._dark_mode else "Light")
         self.settings.set("dark_mode", self._dark_mode)
 
     # ──────────────────────────────────
@@ -320,7 +320,7 @@ class MainWindow(QMainWindow):
                 pass
 
         self.fetch_btn.setEnabled(False)
-        self.fetch_btn.setText("\u23f3  Fetching...")
+        self.fetch_btn.setText("Fetching...")
         self.statusBar().showMessage(f"Fetching info for: {url}")
 
         # Hide previous results
@@ -344,7 +344,7 @@ class MainWindow(QMainWindow):
     def _on_info_ready(self, info: dict):
         self.current_info = info
         self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("\U0001f50d  Fetch Info")
+        self.fetch_btn.setText("Fetch Info")
 
         is_playlist = info.get("_type") == "playlist"
         title = info.get("title", "Unknown")
@@ -376,7 +376,7 @@ class MainWindow(QMainWindow):
     def _on_info_error(self, error: str):
         kind, message = classify_error(error)
         self.fetch_btn.setEnabled(True)
-        self.fetch_btn.setText("\U0001f50d  Fetch Info")
+        self.fetch_btn.setText("Fetch Info")
         self.statusBar().showMessage(f"Error: {message}")
         self._notify("Fetch Error", message)
         if kind == "ffmpeg":
@@ -694,10 +694,8 @@ class MainWindow(QMainWindow):
                 DownloadStatus.PROCESSING,
             )
         )
-        self.tabs.setTabText(0, f"\U0001f4e5 Downloads ({active})")
-        self.tabs.setTabText(
-            1, f"\U0001f4cb History ({self.history_panel.count()})"
-        )
+        self.tabs.setTabText(0, f"Downloads ({active})")
+        self.tabs.setTabText(1, f"History ({self.history_panel.count()})")
 
     def closeEvent(self, event):
         """Always fully quit the app on window close, even if downloads are running."""

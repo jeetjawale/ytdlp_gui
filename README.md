@@ -26,7 +26,7 @@ A modern, cross-platform desktop GUI for [yt-dlp](https://github.com/yt-dlp/yt-d
 - **Speed Limit** — Throttle download speed (500 KB/s to 10 MB/s)
 - **Cookie Import** — Import cookies from Chrome, Firefox, Edge, Safari, and more
 - **Custom Filename Templates** — Use yt-dlp template syntax for output filenames
-- **System Tray** — Minimize to tray with balloon notifications on completion
+- **System Tray** — Tray icon with completion notifications and quick show/quit actions
 - **Light / Dark Theme** — Toggle between dark and light themes (persisted)
 
 ### Packaging
@@ -78,7 +78,7 @@ python main.py
 5. **Click "Add to Queue"** to start downloading
 6. **Monitor progress** in the Downloads tab (up to 3 concurrent)
 7. **View history** in the History tab
-8. **Minimize to tray** — downloads continue in the background
+8. **Use the tray icon** for quick show/hide and completion notifications
 
 ### Building Standalone Executables
 
@@ -103,14 +103,17 @@ ytdlp_gui/
 ├── build.py             # PyInstaller build script
 ├── requirements.txt     # Python dependencies
 ├── README.md
-└── src/
-    ├── __init__.py
-    ├── main_window.py   # Main window — download orchestration, tray, drag & drop
-    ├── widgets.py       # Custom widgets (format panel, advanced settings, dialogs)
-    ├── workers.py       # Background threads (info fetch, format parsing, download)
-    ├── models.py        # Data models (DownloadItem, FormatInfo, DownloadStatus)
-    ├── settings.py      # JSON-backed settings persistence
-    └── styles.py        # QSS dark + light theme stylesheets
+├── src/                 # Application source code
+│   ├── main_window.py   # Main window — orchestration, tray, drag & drop
+│   ├── widgets.py       # Custom widgets (format panel, advanced settings, dialogs)
+│   ├── workers.py       # Background threads (info fetch, format parsing, download)
+│   ├── models.py        # Data models (DownloadItem, FormatInfo, DownloadStatus)
+│   ├── settings.py      # JSON-backed settings persistence
+│   ├── styles.py        # QSS dark + light theme stylesheets
+│   ├── download_options.py # yt-dlp option building
+│   ├── error_utils.py   # Error classification utilities
+│   └── history_service.py  # Download history management
+└── tests/               # Unit and integration tests
 ```
 
 ## Supported Sites

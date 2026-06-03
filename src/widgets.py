@@ -141,6 +141,7 @@ class FormatPanel(QFrame):
         super().__init__(parent)
         self.setObjectName("formatPanel")
         self.setFrameShape(QFrame.Shape.StyledPanel)
+        self._selected_format_id: str = ""
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -200,7 +201,7 @@ class FormatPanel(QFrame):
         row1.addWidget(self.audio_quality_combo)
 
         # Browse formats button
-        self.browse_formats_btn = QPushButton("\U0001f4ca Browse Formats")
+        self.browse_formats_btn = QPushButton("Browse Formats")
         self.browse_formats_btn.setObjectName("browseFormatsBtn")
         self.browse_formats_btn.setToolTip("Show all available formats for manual selection")
         self.browse_formats_btn.clicked.connect(self.browse_formats_clicked.emit)
@@ -230,7 +231,7 @@ class FormatPanel(QFrame):
         self.output_dir.setText(default)
         row2.addWidget(self.output_dir, 1)
 
-        self.browse_btn = QPushButton("\U0001f4c1 Browse")
+        self.browse_btn = QPushButton("Browse")
         self.browse_btn.setObjectName("browseBtn")
         row2.addWidget(self.browse_btn)
 
@@ -262,9 +263,6 @@ class FormatPanel(QFrame):
     def get_codec(self) -> str:
         codec = self.codec_combo.currentText()
         return codec.lower() if codec != "Any" else ""
-
-        # Internal state for manual format override
-        self._selected_format_id: str = ""
 
     def _populate_video_qualities(self):
         self.quality_combo.clear()
@@ -577,7 +575,7 @@ class BatchImportDialog(QDialog):
 
         btn_layout = QHBoxLayout()
 
-        load_btn = QPushButton("\U0001f4c4 Load from File")
+        load_btn = QPushButton("Load from File")
         load_btn.setObjectName("loadFileBtn")
         load_btn.clicked.connect(self._load_file)
         btn_layout.addWidget(load_btn)
@@ -588,7 +586,7 @@ class BatchImportDialog(QDialog):
         self._count_label = count_label
         btn_layout.addWidget(count_label)
 
-        add_btn = QPushButton("\U0001f4e5 Add All")
+        add_btn = QPushButton("Add All")
         add_btn.setObjectName("batchAddBtn")
         add_btn.clicked.connect(self._on_add)
         btn_layout.addWidget(add_btn)
@@ -872,7 +870,7 @@ class HistoryItemWidget(QFrame):
 
         output_dir = data.get("output_dir", "")
         if output_dir and os.path.isdir(output_dir):
-            open_btn = QPushButton("\U0001f4c2 Open Folder")
+            open_btn = QPushButton("Open Folder")
             open_btn.setObjectName("openFolderBtn")
             open_btn.clicked.connect(lambda: self._open_folder(output_dir))
             layout.addWidget(open_btn)
@@ -908,7 +906,7 @@ class HistoryPanel(QWidget):
         top_bar = QHBoxLayout()
         top_bar.setContentsMargins(8, 0, 8, 0)
         top_bar.addStretch()
-        self.clear_btn = QPushButton("\U0001f5d1 Clear History")
+        self.clear_btn = QPushButton("Clear History")
         self.clear_btn.setObjectName("clearHistoryBtn")
         self.clear_btn.clicked.connect(self._clear_all)
         top_bar.addWidget(self.clear_btn)
