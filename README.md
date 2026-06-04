@@ -80,6 +80,26 @@ python main.py
 7. **View history** in the History tab
 8. **Use the tray icon** for quick show/hide and completion notifications
 
+### Web Application Mode
+
+The project now includes a lightweight Flask web application that can be deployed as a web service.
+
+**Local Testing:**
+```bash
+# Start the Flask development server
+python app.py
+```
+The app will bind to `0.0.0.0:8080`. You can test the endpoints:
+- `http://localhost:8080/health`
+- `http://localhost:8080/download-info?url=https://www.youtube.com/watch?v=...`
+
+**Render Deployment:**
+The provided `Dockerfile` is pre-configured for Render.
+1. Create a new **Web Service** on Render.
+2. Connect your repository.
+3. Select **Docker** as the runtime environment.
+4. Render will automatically expose the application on the provided `$PORT`.
+
 ### Building Standalone Executables
 
 ```bash
