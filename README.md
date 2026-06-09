@@ -7,9 +7,10 @@ A modern, cross-platform desktop GUI for [yt-dlp](https://github.com/yt-dlp/yt-d
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 Live application:
-https://ytdlp-gui.onrender.com/
+https://ytdlp-gui.onrender.com
 
-Every push to the main branch automatically triggers a new deployment on Render.
+Deployment:
+Every push to the main branch triggers a GitHub Actions workflow that deploys the application to Render.
 
 ## Features
 
