@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+# Install system dependencies (ffmpeg required by yt-dlp for merging/audio)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python deps first — cached layer, only busts when requirements change
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Source is NOT copied here — it is bind-mounted at runtime by docker-compose
+# This means code changes on the host are immediately reflected without a rebuild.
+
+EXPOSE 8080
+
+# Flask's built-in dev server with auto-reload enabled via FLASK_DEBUG=1
+CMD ["python", "app.py"]

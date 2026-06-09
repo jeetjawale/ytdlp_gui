@@ -1,0 +1,17 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    volumes:
+      # Bind-mount the entire project into the container.
+      # Any change you make locally is instantly visible inside the container,
+      # and Flask's dev server will auto-reload on .py file changes.
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - FLASK_DEBUG=1
+      - PORT=8080

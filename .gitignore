@@ -27,3 +27,5 @@ Thumbs.db
 
 # App settings (local)
 .ytdlp_gui/
+# Local env overrides — never commit
+.env
