@@ -6,6 +6,11 @@ A modern, cross-platform desktop GUI for [yt-dlp](https://github.com/yt-dlp/yt-d
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.5+-green)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
+Live application:
+https://ytdlp-gui.onrender.com/
+
+Every push to the main branch automatically triggers a new deployment on Render.
+
 ## Features
 
 ### Core
